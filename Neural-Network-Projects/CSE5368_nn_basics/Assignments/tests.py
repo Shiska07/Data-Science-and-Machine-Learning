@@ -61,4 +61,3 @@ def test_can_fit_data_test():
     
     return 0
 
-res = test_can_fit_data_test()
