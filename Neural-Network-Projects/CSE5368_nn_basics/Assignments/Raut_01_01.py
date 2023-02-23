@@ -43,13 +43,13 @@ def get_network_output(x_sample, weights_list):
     return layer_output
 
 # cakculates mean squared error for a single sample
-def get_sample_mean_squared_error(y_sample, y_pred_sample):
+def get_sample_mean_squared_error(y_sample, y_pred):
     
     # get the numer of rows for output value
     n = y_sample.shape[0]
     
     # sum of squared error
-    sse = np.sum(((y_sample - y_pred_sample)**2), axis = 1)
+    sse = np.sum(((y_sample - y_pred)**2), axis = 1)
     
     # mean squared error
     mse = sse/n
@@ -61,8 +61,56 @@ def get_average_mse(Y, Y_pred):
     pass
 
 # adjusts weights after a training sample has been processed
-def adjust_weights(weights_list, x_train_sample, alpha, h):
-    pass
+def adjust_weights(weights_list, x_train_sample, y_train_sample, alpha, h):
+
+    # initialize list to store adjusted weights and temp weights
+    adjusted_weights_list = []
+
+    for i in range(len(weights_list)):
+        # initialize nupy arrays to store mse errors for gradient calculation
+        mse_add_h_mtx = np.zeros(weights_list[i].shape)
+        mse_sub_h_mtx = np.zeros(weights_list[i].shape)
+
+        # create temporary weights lsit for gradient calculation
+        # use a copy to avoid changing the original weights list
+        temp_weights_list = weights_list.copy()
+        n, m = weights_list[i].shape
+
+        # calculate partial derivative wrt each weight in the weight matrix
+        for j in range(n):
+            for k in range(m):
+                
+                # create a temporary matrix to store original value
+                # use a copy to avoid changing the original weights matrix
+                temp_wt_mtx = weights_list[i].copy()
+
+                # save original value
+                orig_val = temp_wt_mtx[j, k]
+
+                # get and store f(x + h) for W(n , m)
+                temp_wt_mtx[j, k] = orig_val + h
+                temp_weights_list[i] = temp_wt_mtx.copy()
+                y_add_h = get_network_output(x_train_sample, temp_weights_list)
+                mse_y_add_h = get_sample_mean_squared_error(y_train_sample, y_add_h)
+                mse_add_h_mtx[j, k] = mse_y_add_h
+
+                # get and store f(x h h) for W(n , m)
+                temp_wt_mtx[j, k] = orig_val - h
+                temp_weights_list[i] = temp_wt_mtx.copy()
+                y_sub_h = get_network_output(x_train_sample, temp_weights_list)
+                mse_y_sub_h = get_sample_mean_squared_error(y_train_sample, y_sub_h)
+                mse_sub_h_mtx[j, k] = mse_y_sub_h
+
+        # at this point gradient values of a single weight matrix can be calculated
+        gradient_mtx = (mse_add_h_mtx + mse_sub_h_mtx) / 2*h
+
+        # new_weight = old_weight - alpha*gradient
+        new_wt_mtx = weights_list[i] - (alpha*gradient_mtx)
+
+        adjusted_weights_list.append(new_wt_mtx)
+
+    return adjusted_weights_list 
+    
 
 # a single pass over the training data
 def train_network(X_train,Y_train, weights_list, alpha, h):
@@ -74,8 +122,8 @@ def train_network(X_train,Y_train, weights_list, alpha, h):
 
         # take a single sample from training data 
         x_sample =  X_train[:,i]
-        y_sample = get_network_output(x_sample, weights_list)
-
+        y_sample = Y_train[:,1].reshape(Y_train[:,1].shape[0], 1)
+        weights_list = adjust_weights(weights_list, x_sample, y_sample, alpha, h)
     pass
 
 # get predictions for X_test after training
