@@ -61,3 +61,15 @@ def test_can_fit_data_test():
     
     return 0
 
+def test_can_fit_data_test_2d():
+    np.random.seed(1234)
+    from sklearn.model_selection import train_test_split
+    X, y = create_toy_data_nonlinear_2d(110)
+    y = sigmoid(y)
+    X_train, X_test, Y_train, Y_test = train_test_split(X, y, test_size=0.1, random_state=42)
+    Y_train = Y_train.reshape(-1,2)
+    Y_train = Y_train
+    Y_test = Y_test.reshape(-1,2)
+    Y_test = Y_test
+
+    [W, err, Out] = multi_layer_nn(X_train,Y_train,X_test,Y_test,[2,2],alpha=0.35,epochs=1000,h=1e-8,seed=1234)
