@@ -1,7 +1,7 @@
 import numpy as np
 # Modify the line below based on your last name
 # for example:
-from Raut_01_01 import multi_layer_nn
+from kamangar_01_01 import multi_layer_nn
 # from Your_last_name_01_01 import multi_layer_nn
 
 def sigmoid(x):

@@ -26,7 +26,7 @@ def get_network_output(x_sample, weights_list):
 
     # add 1 to the first row of input 
     nn_input = np.ones((x_sample.shape[0]+1, 1))
-    nn_input[1::] = x_sample.reshape(x_sample.shape[0], 1)
+    nn_input[1::] = x_sample
 
     # get output for each layer
     for i in range(len(weights_list)):
@@ -39,19 +39,37 @@ def get_network_output(x_sample, weights_list):
     
     return layer_output
 
-# cakculates mean squared error for a single sample
+# calculates mean squared error for a single sample
 def get_sample_mean_squared_error(y_sample, y_pred):
     
     # get the numer of rows for output value
-    n_out = y_sample.shape[0]
+    ndim_out = y_sample.shape[0]
     
     # sum of squared error
     sse = np.sum(((y_sample - y_pred)**2), axis = 1)
     
     # mean squared error
-    mse = sse/n_out
+    mse = sse / ndim_out
     
-    return mse
+    return mse[0]
+
+# calculates the average mean squared error for the test data
+def get_avg_mse(Y_test, Y_pred):
+
+    # get number of samples and dimension of the output
+    ndim_out, n_samples = Y_test.shape
+
+    # calculate sum of squared error for column using vectorization
+    sse_each_samp = np.sum((Y_test - Y_pred)**2, axis = 0)
+
+    # calculate mse for each column using vectorization
+    mse_each_samp = np.sum((Y_test - Y_pred)**2, axis = 0) / ndim_out
+
+    # calculate average mean sqaured error
+    average_mse = np.sum(mse_each_samp) / n_samples
+
+    # return mse as a value not a numpy array
+    return average_mse
 
 
 def adjust_weights(weights_list, x_train_sample, y_train_sample, alpha, h):
@@ -62,7 +80,7 @@ def adjust_weights(weights_list, x_train_sample, y_train_sample, alpha, h):
     for i in range(len(weights_list)):
 
         n, m = weights_list[i].shape
-        gradient_mtx = np.zeros((n, m))
+        gradient_mtx = np.zeros((n, m), dtype = float)
 
         # calculate partial derivative wrt each weight in the weight matrix
         for j in range(n):
@@ -108,16 +126,24 @@ def train_network(X_train,Y_train, weights_list, alpha, h):
         x_sample =  X_train[:,i].reshape(n_feat_train, 1)
         y_sample = Y_train[:,i].reshape(n_out_train, 1)
         weights_list = adjust_weights(weights_list, x_sample, y_sample, alpha, h)
-    pass
+    
+    return weights_list
 
-
-# calculates the average mse for results of a single epoch
-def get_average_mse(Y_test, Y_pred):
-    pass
 
 # get predictions for X_test after training
-def get_predictions(weights_list, X_test):
-    pass
+def get_predictions(weights_list, X_test, Y_test):
+
+    n_feat_test, n_test_samples = X_test.shape
+    n_out, __ = Y_test.shape
+
+    Y_pred = np.zeros((n_test_samples, n_out))
+
+    for i in range(n_test_samples):
+        x_test = X_test[:,i].reshape(n_feat_test, 1)
+        y_pred = get_network_output(x_test, weights_list)
+        Y_pred[i] = y_pred.transpose()
+
+    return Y_pred.transpose()
 
 
 def multi_layer_nn(X_train,Y_train,X_test,Y_test,layers,alpha,epochs,h=0.00001,seed=2):
@@ -133,7 +159,7 @@ def multi_layer_nn(X_train,Y_train,X_test,Y_test,layers,alpha,epochs,h=0.00001,s
     # initalize list to store average MSE per epoch
     avg_mse_per_epoch = []
     
-    # get weights for each layer
+    # initialize weights for each layer
     for i in range(n_layers):
         
         if i == 0:
@@ -145,40 +171,25 @@ def multi_layer_nn(X_train,Y_train,X_test,Y_test,layers,alpha,epochs,h=0.00001,s
             weights_list.append(get_weights_matrix(n_nodes, n_input, seed))
     
     # do the following per epoch
-    
-    weights_list = train_network(X_train, Y_train, weights_list, alpha, h)
-    # Y_pred = get_predictions(weights_list, X_test)
-    # avg_mse_per_epoch.append(get_average_mse(Y_test, Y_pred))
-        
-    # alpha: learning rate
-    # epochs: number of epochs for training.
-    # h: step size
-    # seed: random number generator seed for initializing the weights.
-    # return: This function should return a list containing 3 elements:
-        # The first element of the return list should be a list of weight matrices.
-        # Each element of the list corresponds to the weight matrix of the corresponding layer.
+    for i in range(epochs):
 
-        # The second element should be a one dimensional array of numbers
-        # representing the average mse error after each epoch. Each error should
-        # be calculated by using the X_test array while the network is frozen.
-        # This means that the weights should not be adjusted while calculating the error.
+        # train network
+        weights_list = train_network(X_train, Y_train, weights_list, alpha, h)
 
-        # The third element should be a two-dimensional array [output_dimensions,nof_test_samples]
-        # representing the actual output of network when X_test is used as input.
+        # test network
+        Y_pred = get_predictions(weights_list, X_test, Y_test)
 
-    # Notes:
-    # DO NOT use any other package other than numpy
-    # Bias should be included in the weight matrix in the first column.
-    # Assume that the activation functions for all the layers are sigmoid.
-    # Use MSE to calculate error.
-    # Use gradient descent for adjusting the weights.
-    # use centered difference approximation to calculate partial derivatives.
-    # (f(x + h)-f(x - h))/2*h
-    # Reseed the random number generator when initializing weights for each layer.
-    # i.e., Initialize the weights for each layer by:
-    # np.random.seed(seed)
-    # np.random.randn()
-    return 0
+        # record MSE of the test samples per epoch
+        avg_mse_per_epoch.append(get_avg_mse(Y_test, Y_pred))
+
+    # get final prediction
+    Y_pred_final = get_predictions(weights_list, X_test, Y_test)
+
+    # convert test data average mse list to numpy array
+    test_mse = np.array(avg_mse_per_epoch, dtype = float)
+
+    # return final weights, average mse for test per epoch, final prediction
+    return weights_list, test_mse, Y_pred_final
 
 def sigmoid(x):
     # This function calculates the sigmoid function
@@ -223,6 +234,7 @@ def create_toy_data_nonlinear_2d(n_samples=1000):
 
     return X.T, y.T
 
+
 def test_can_fit_data_test():
     np.random.seed(12345)
     X, y = create_toy_data_nonlinear(n_samples=110)
@@ -238,7 +250,7 @@ def test_can_fit_data_test():
     assert err[3] < err[2]
     assert err[10] < 0.15
     assert err[999] < 0.1
-    assert abs(err[9] - 0.10182781417045624) < 1e-5
+    assert abs(err[9] - 0.10182781417045624) < 1e-5    # did not pass
 
 
 
@@ -257,8 +269,56 @@ def test_can_fit_data_test_2d():
     assert err[2] < err[1]
     assert err[3] < err[2]
     assert err[10] < 0.04
-    assert err[999] < 0.004
+    assert err[999] < 0.004  # did not pass
     assert abs(err[9] - 0.022177658583431813) < 1e-5
 
-test_can_fit_data_test()
+
+def test_check_weight_update():
+    np.random.seed(1234)
+    X, y = create_toy_data_nonlinear_2d(110)
+    y = sigmoid(y)
+    X_train = X[:, :100]
+    X_test = X[:, 100:]
+    Y_train = y[:, :100]
+    Y_test = y[:, 100:]
+
+    np.random.seed(1234)
+    [W_before, err, Out] = multi_layer_nn(X_train,Y_train,X_test,Y_test,[2,2],alpha=0.2,epochs=0,h=1e-8,seed=1234)
+    np.random.seed(1234)
+    [W_after, err, Out] = multi_layer_nn(X_train, Y_train, X_test, Y_test, [2, 2], alpha=0.2, epochs=1, h=1e-8, seed=1234)
+    delta1 = (W_after[0] - W_before[0])
+    delta2 = (W_after[1] - W_before[1])
+
+    correct_delta1 = np.array([[-6.66044303e-05, -1.51193183e-03, -1.51193183e-03,
+                             -1.51193183e-03, -1.51193183e-03],
+                            [4.78145648e-04, 1.38747444e-03, 1.38747444e-03,
+                             1.38747444e-03, 1.38747451e-03]])
+    correct_delta2 = np.array([[-0.00498067, -0.00342466, -0.00417229],
+                            [0.00745801, 0.00347394, 0.002611]])
+
+    assert np.allclose(delta1, correct_delta1, atol=1e-5)
+    assert np.allclose(delta2, correct_delta2, atol=1e-5)
+
+
+def test_h_value_used():
+    np.random.seed(1234)
+    X, y = create_toy_data_nonlinear_2d(110)
+    y = sigmoid(y)
+    X_train = X[:, :100]
+    X_test = X[:, 100:]
+    Y_train = y[:, :100]
+    Y_test = y[:, 100:]
+
+    np.random.seed(1234)
+    [W_before, err, Out] = multi_layer_nn(X_train,Y_train,X_test,Y_test,[2,2],alpha=0.2,epochs=0,h=1e-8,seed=1234)
+    np.random.seed(1234)
+    [W_after, err, Out] = multi_layer_nn(X_train, Y_train, X_test, Y_test, [2, 2], alpha=0.2, epochs=1, h=10, seed=1234)
+    # if we use some large value for h instead of 1e-8, we should get a different result
+    # this will check if the students are using the h value
+
+    assert not np.allclose(W_after[0], W_before[0], atol=1e-5)
+    assert not np.allclose(W_after[1], W_before[1], atol=1e-5)
+
+test_check_output_values()
+
 
