@@ -24,9 +24,6 @@ def get_layer_output(x, W):
 # returns network output y_sample
 def get_network_output(x_sample, weights_list):
 
-    # reshape x sample from (n,) to to (n,1) 
-    x_sample = x_sample.reshape(x_sample.shape[0], 1)
-
     # add 1 to the first row of input 
     nn_input = np.ones((x_sample.shape[0]+1, 1))
     nn_input[1::] = x_sample.reshape(x_sample.shape[0], 1)
@@ -46,18 +43,17 @@ def get_network_output(x_sample, weights_list):
 def get_sample_mean_squared_error(y_sample, y_pred):
     
     # get the numer of rows for output value
-    n = y_sample.shape[0]
+    n_out = y_sample.shape[0]
     
     # sum of squared error
     sse = np.sum(((y_sample - y_pred)**2), axis = 1)
     
     # mean squared error
-    mse = sse/n
+    mse = sse/n_out
     
     return mse
 
 
-# adjusts weights after a training sample has been processed
 def adjust_weights(weights_list, x_train_sample, y_train_sample, alpha, h):
 
     # initialize list to store adjusted weights and temp weights
@@ -65,57 +61,52 @@ def adjust_weights(weights_list, x_train_sample, y_train_sample, alpha, h):
 
     for i in range(len(weights_list)):
 
-        # create temporary weights lsit for gradient calculation
-        # use a copy to avoid changing the original weights list
-        temp_weights_list = weights_list.copy()
         n, m = weights_list[i].shape
         gradient_mtx = np.zeros((n, m))
 
         # calculate partial derivative wrt each weight in the weight matrix
         for j in range(n):
             for k in range(m):
-                
-                # create a temporary matrix to store original value
-                # use a copy to avoid changing the original weights matrix
-                temp_wt_mtx = weights_list[i].copy()
 
                 # save original value
-                orig_val = temp_wt_mtx[j, k]
+                orig_val = weights_list[i][j, k]
 
                 # get and store f(x + h) for W(n , m)
-                temp_wt_mtx[j, k] = orig_val + h
-                temp_weights_list[i] = temp_wt_mtx.copy()
-                y_add_h = get_network_output(x_train_sample, temp_weights_list)
+                weights_list[i][j, k] = orig_val + h
+                y_add_h = get_network_output(x_train_sample, weights_list)
                 mse_y_add_h = get_sample_mean_squared_error(y_train_sample, y_add_h)
 
                 # get and store f(x h h) for W(n , m)
-                temp_wt_mtx[j, k] = orig_val - h
-                temp_weights_list[i] = temp_wt_mtx.copy()
-                y_sub_h = get_network_output(x_train_sample, temp_weights_list)
+                weights_list[i][j, k] = orig_val - h
+                y_sub_h = get_network_output(x_train_sample, weights_list)
                 mse_y_sub_h = get_sample_mean_squared_error(y_train_sample, y_sub_h)
-
+                
+                # restore original value in the weight matrix
+                weights_list[i][j, k] = orig_val
+                
                 # calculate and save gradiet value
-                gradient_mtx[j, k] = (mse_y_add_h + mse_y_sub_h) / (2*h)
+                gradient_mtx[j, k] = (mse_y_add_h - mse_y_sub_h) / (2*h)
 
         # new_weight = old_weight - alpha*gradient
         new_wt_mtx = weights_list[i] - (alpha*gradient_mtx)
 
         adjusted_weights_list.append(new_wt_mtx)
 
-    return adjusted_weights_list 
+    return adjusted_weights_list
     
 
 # a single pass over the training data
 def train_network(X_train,Y_train, weights_list, alpha, h):
 
     # get number of features and number of samples
-    n_feat_train, n_train = X_train.shape
+    n_feat_train, n_train_samples = X_train.shape
+    n_out_train, __ = Y_train.shape
 
-    for i in range(n_train):
+    for i in range(n_train_samples):
 
         # take a single sample from training data 
-        x_sample =  X_train[:,i]
-        y_sample = Y_train[:,1].reshape(Y_train[:,1].shape[0], 1)
+        x_sample =  X_train[:,i].reshape(n_feat_train, 1)
+        y_sample = Y_train[:,i].reshape(n_out_train, 1)
         weights_list = adjust_weights(weights_list, x_sample, y_sample, alpha, h)
     pass
 
@@ -130,16 +121,10 @@ def get_predictions(weights_list, X_test):
 
 
 def multi_layer_nn(X_train,Y_train,X_test,Y_test,layers,alpha,epochs,h=0.00001,seed=2):
-    
-    # reshape input matrices/vectors
-    X_train = np.transpose(X_train)
-    Y_train = np.transpose(Y_train)
-    X_test = np.transpose(X_test)
-    Y_test = np.transpose(Y_test)
 
     # get number of features and number of samples
-    n_feat_train, n_train = X_train.shape
-    n_feat_test , n_test = X_test.shape
+    n_feat_train, n_train_samples = X_train.shape
+    __ , n_test_samples = X_test.shape
     
     #get number of layers and initialize list to store weights for each layer
     n_layers = len(layers)
@@ -217,7 +202,7 @@ def create_toy_data_nonlinear(n_samples=1000):
     X = X[idx]
     y = y[idx]
 
-    return X, y
+    return X.T, y[:, np.newaxis].T
 
 def create_toy_data_nonlinear_2d(n_samples=1000):
     X = np.zeros((n_samples, 4))
@@ -225,6 +210,7 @@ def create_toy_data_nonlinear_2d(n_samples=1000):
     X[:, 1] = np.linspace(-1, 1, n_samples)
     X[:, 2] = np.linspace(-1, 1, n_samples)
     X[:, 3] = np.linspace(-1, 1, n_samples)
+
     y = np.zeros((n_samples, 2))
     y[:, 0] = 0.5*X[:, 0] -0.2 * X[:, 1]**2 - 0.2*X[:, 2] + X[:, 3]*X[:,1] - 0.1
     y[:, 1] = 1.5 * X[:, 0] + 1.25 * X[:, 1]*X[:, 0] + 0.4 * X[:, 2] * X[:, 0]
@@ -235,23 +221,44 @@ def create_toy_data_nonlinear_2d(n_samples=1000):
     X = X[idx]
     y = y[idx]
 
-    return X, y
+    return X.T, y.T
 
 def test_can_fit_data_test():
     np.random.seed(12345)
-    from sklearn.model_selection import train_test_split
     X, y = create_toy_data_nonlinear(n_samples=110)
     y = sigmoid(y)
-    X_train, X_test, Y_train, Y_test = train_test_split(X, y, test_size=0.1, random_state=42)
-    Y_train = Y_train.reshape(-1,1)
-    Y_train = Y_train
-    Y_test = Y_test.reshape(-1,1)
-    Y_test = Y_test
+    X_train = X[:, :100]
+    X_test = X[:, 100:]
+    Y_train = y[:, :100]
+    Y_test = y[:, 100:]
 
-    multi_layer_nn(X_train,Y_train,X_test,Y_test,[2,1],alpha=0.35,epochs=1000,h=1e-8,seed=1234)
-    
-    return 0
+    [W, err, Out] = multi_layer_nn(X_train,Y_train,X_test,Y_test,[2,1],alpha=0.35,epochs=1000,h=1e-8,seed=1234)
+    assert err[1] < err[0]
+    assert err[2] < err[1]
+    assert err[3] < err[2]
+    assert err[10] < 0.15
+    assert err[999] < 0.1
+    assert abs(err[9] - 0.10182781417045624) < 1e-5
 
+
+
+def test_can_fit_data_test_2d():
+    np.random.seed(1234)
+    X, y = create_toy_data_nonlinear_2d(110)
+    y = sigmoid(y)
+    X_train = X[:, :100]
+    X_test = X[:, 100:]
+    Y_train = y[:, :100]
+    Y_test = y[:, 100:]
+
+    [W, err, Out] = multi_layer_nn(X_train,Y_train,X_test,Y_test,[2,2],alpha=0.35,epochs=1000,h=1e-8,seed=1234)
+    #print(err[10], err[999], err[9])
+    assert err[1] < err[0]
+    assert err[2] < err[1]
+    assert err[3] < err[2]
+    assert err[10] < 0.04
+    assert err[999] < 0.004
+    assert abs(err[9] - 0.022177658583431813) < 1e-5
 
 test_can_fit_data_test()
 
